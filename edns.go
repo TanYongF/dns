@@ -92,24 +92,22 @@ func (rr *OPT) len() int {
 
 // Version returns the EDNS version used. Only zero is defined.
 func (rr *OPT) Version() uint8 {
-	return uint8(rr.Hdr.Ttl & 0x00FF0000 >> 16)
+	return uint8((rr.Hdr.Ttl & 0x00FF0000) >> 16)
 }
 
 // SetVersion sets the version of EDNS. This is usually zero.
 func (rr *OPT) SetVersion(v uint8) {
-	rr.Hdr.Ttl = rr.Hdr.Ttl&0xFF00FFFF | uint32(v)<<16
+	rr.Hdr.Ttl = rr.Hdr.Ttl&0xFF00FFFF | (uint32(v) << 16)
 }
 
 // ExtendedRcode returns the EDNS extended RCODE field (the upper 8 bits of the TTL).
 func (rr *OPT) ExtendedRcode() int {
-	return int(rr.Hdr.Ttl&0xFF000000>>24) << 4
+	return int((rr.Hdr.Ttl & 0xFF000000) >> 24)
 }
 
 // SetExtendedRcode sets the EDNS extended RCODE field.
-//
-// If the RCODE is not an extended RCODE, will reset the extended RCODE field to 0.
-func (rr *OPT) SetExtendedRcode(v uint16) {
-	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | uint32(v>>4)<<24
+func (rr *OPT) SetExtendedRcode(v uint8) {
+	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | (uint32(v) << 24)
 }
 
 // UDPSize returns the UDP buffer size.
@@ -273,16 +271,22 @@ func (e *EDNS0_SUBNET) unpack(b []byte) error {
 		if e.SourceNetmask > net.IPv4len*8 || e.SourceScope > net.IPv4len*8 {
 			return errors.New("dns: bad netmask")
 		}
-		addr := make(net.IP, net.IPv4len)
-		copy(addr, b[4:])
-		e.Address = addr.To16()
+		addr := make([]byte, net.IPv4len)
+		for i := 0; i < net.IPv4len && 4+i < len(b); i++ {
+			addr[i] = b[4+i]
+		}
+		e.Address = net.IPv4(addr[0], addr[1], addr[2], addr[3])
 	case 2:
 		if e.SourceNetmask > net.IPv6len*8 || e.SourceScope > net.IPv6len*8 {
 			return errors.New("dns: bad netmask")
 		}
-		addr := make(net.IP, net.IPv6len)
-		copy(addr, b[4:])
-		e.Address = addr
+		addr := make([]byte, net.IPv6len)
+		for i := 0; i < net.IPv6len && 4+i < len(b); i++ {
+			addr[i] = b[4+i]
+		}
+		e.Address = net.IP{addr[0], addr[1], addr[2], addr[3], addr[4],
+			addr[5], addr[6], addr[7], addr[8], addr[9], addr[10],
+			addr[11], addr[12], addr[13], addr[14], addr[15]}
 	default:
 		return errors.New("dns: bad address family")
 	}
@@ -416,7 +420,6 @@ func (e *EDNS0_LLQ) String() string {
 	return s
 }
 
-// EDNS0_DUA implements the EDNS0 "DNSSEC Algorithm Understood" option. See RFC 6975.
 type EDNS0_DAU struct {
 	Code    uint16 // Always EDNS0DAU
 	AlgCode []uint8
@@ -439,7 +442,6 @@ func (e *EDNS0_DAU) String() string {
 	return s
 }
 
-// EDNS0_DHU implements the EDNS0 "DS Hash Understood" option. See RFC 6975.
 type EDNS0_DHU struct {
 	Code    uint16 // Always EDNS0DHU
 	AlgCode []uint8
@@ -462,7 +464,6 @@ func (e *EDNS0_DHU) String() string {
 	return s
 }
 
-// EDNS0_N3U implements the EDNS0 "NSEC3 Hash Understood" option. See RFC 6975.
 type EDNS0_N3U struct {
 	Code    uint16 // Always EDNS0N3U
 	AlgCode []uint8
@@ -486,7 +487,6 @@ func (e *EDNS0_N3U) String() string {
 	return s
 }
 
-// EDNS0_EXPIRE implementes the EDNS0 option as described in RFC 7314.
 type EDNS0_EXPIRE struct {
 	Code   uint16 // Always EDNS0EXPIRE
 	Expire uint32

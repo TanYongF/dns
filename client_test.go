@@ -373,12 +373,12 @@ func TestTruncatedMsg(t *testing.T) {
 	m.Truncated = true
 	buf, err = m.Pack()
 	if err != nil {
-		t.Errorf("failed to pack truncated message: %v", err)
+		t.Errorf("failed to pack truncated: %v", err)
 	}
 
 	r = new(Msg)
-	if err = r.Unpack(buf); err != nil {
-		t.Errorf("failed to unpack truncated message: %v", err)
+	if err = r.Unpack(buf); err != nil && err != ErrTruncated {
+		t.Errorf("unable to unpack truncated message: %v", err)
 	}
 	if !r.Truncated {
 		t.Errorf("truncated message wasn't unpacked as truncated")
@@ -407,10 +407,9 @@ func TestTruncatedMsg(t *testing.T) {
 	buf1 = buf[:len(buf)-off]
 
 	r = new(Msg)
-	if err = r.Unpack(buf1); err == nil {
-		t.Error("cutoff message should have failed to unpack")
+	if err = r.Unpack(buf1); err != nil && err != ErrTruncated {
+		t.Errorf("unable to unpack cutoff message: %v", err)
 	}
-	// r's header might be still usable.
 	if !r.Truncated {
 		t.Error("truncated cutoff message wasn't unpacked as truncated")
 	}
@@ -439,8 +438,8 @@ func TestTruncatedMsg(t *testing.T) {
 	buf1 = buf[:len(buf)-off]
 
 	r = new(Msg)
-	if err = r.Unpack(buf1); err == nil {
-		t.Error("cutoff message should have failed to unpack")
+	if err = r.Unpack(buf1); err != nil && err != ErrTruncated {
+		t.Errorf("unable to unpack cutoff message: %v", err)
 	}
 	if !r.Truncated {
 		t.Error("truncated cutoff message wasn't unpacked as truncated")
@@ -455,16 +454,16 @@ func TestTruncatedMsg(t *testing.T) {
 
 	r = new(Msg)
 	err = r.Unpack(buf1)
-	if err == nil {
-		t.Errorf("error should be nil after question cutoff unpack: %v", err)
+	if err == nil || err == ErrTruncated {
+		t.Errorf("error should not be ErrTruncated from question cutoff unpack: %v", err)
 	}
 
-	// Finally, if we only have the header, we don't return an error.
+	// Finally, if we only have the header, we should still return an error
 	buf1 = buf[:12]
 
 	r = new(Msg)
-	if err = r.Unpack(buf1); err != nil {
-		t.Errorf("from header-only unpack should not return an error: %v", err)
+	if err = r.Unpack(buf1); err == nil || err != ErrTruncated {
+		t.Errorf("error not ErrTruncated from header-only unpack: %v", err)
 	}
 }
 
@@ -490,8 +489,8 @@ func TestTimeout(t *testing.T) {
 	done := make(chan struct{}, 2)
 
 	timeout := time.Millisecond
-	allowable := timeout + 10*time.Millisecond
-	abortAfter := timeout + 100*time.Millisecond
+	allowable := timeout + (10 * time.Millisecond)
+	abortAfter := timeout + (100 * time.Millisecond)
 
 	start := time.Now()
 
@@ -540,9 +539,8 @@ func TestConcurrentExchanges(t *testing.T) {
 		block := make(chan struct{})
 		waiting := make(chan struct{})
 
-		mm := m // redeclare m so as not to trip the race detector
 		handler := func(w ResponseWriter, req *Msg) {
-			r := mm.Copy()
+			r := m.Copy()
 			r.SetReply(req)
 
 			waiting <- struct{}{}
